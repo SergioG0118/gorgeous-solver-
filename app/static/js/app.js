@@ -1,4 +1,11 @@
 import { COLORS, COLOR_HEX, CubeScene, scrambleColors, solvedColors } from "./cube.js";
+import {
+  SCAN_FACES,
+  applyFaceToCubeColors,
+  sampleFaceFromVideo,
+  startCamera,
+  stopCamera,
+} from "./camera.js";
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -10,6 +17,7 @@ const ui = {
   btnSolve: $("#btn-solve"),
   btnReset: $("#btn-reset"),
   btnScramble: $("#btn-scramble"),
+  btnScan: $("#btn-scan"),
   btnPlay: $("#btn-play"),
   btnPrev: $("#btn-prev"),
   btnNext: $("#btn-next"),
@@ -20,6 +28,19 @@ const ui = {
   stepLabel: $("#step-label"),
   btnLabel: $(".btn-label"),
   btnSpinner: $(".btn-spinner"),
+  scanModal: $("#scan-modal"),
+  scanVideo: $("#scan-video"),
+  scanGrid: $("#scan-grid"),
+  scanEmpty: $("#scan-empty"),
+  scanEmptyMsg: $("#scan-empty-msg"),
+  scanPreview: $("#scan-preview"),
+  scanStatus: $("#scan-status"),
+  scanHold: $("#scan-hold"),
+  scanTitle: $("#scan-title"),
+  scanProgress: $("#scan-progress"),
+  btnScanClose: $("#btn-scan-close"),
+  btnScanCapture: $("#btn-scan-capture"),
+  btnScanBack: $("#btn-scan-back"),
 };
 
 let cube;
@@ -30,6 +51,14 @@ let playing = false;
 let paintColor = "red";
 /** Colors snapshot when solution was computed (before playback). */
 let solutionBaseColors = null;
+
+/** Camera scan state */
+let scanStream = null;
+let scanFaceIndex = 0;
+let scanDraftColors = null;
+let scanLiveColors = null;
+let scanRaf = 0;
+let scanOpen = false;
 
 function setStatus(kind, message) {
   ui.status.className = `status ${kind}`;
@@ -110,7 +139,6 @@ function updatePlaybackButtons() {
 
 async function jumpToStep(target) {
   if (!solutionBaseColors || target === stepIndex) return;
-  // Rewind to base then replay — reliable vs reverse animation edge cases
   playing = false;
   ui.btnPlay.textContent = "Play";
   cube.setColors(solutionBaseColors);
@@ -120,9 +148,6 @@ async function jumpToStep(target) {
     stepIndex = i + 1;
   }
   cube.setHighlight(-1);
-  if (stepIndex < solutionMoves.length) {
-    // Soft highlight via chip only
-  }
   renderMoves();
 }
 
@@ -206,6 +231,161 @@ async function solveCube() {
   }
 }
 
+function hexCss(colorName) {
+  return `#${COLOR_HEX[colorName].toString(16).padStart(6, "0")}`;
+}
+
+function renderScanPreview(colors9) {
+  ui.scanPreview.innerHTML = "";
+  const face = SCAN_FACES[scanFaceIndex];
+  for (let i = 0; i < 9; i++) {
+    const color = i === 4 ? face.center : colors9?.[i] || "white";
+    const sw = document.createElement("span");
+    sw.style.background = hexCss(color);
+    sw.title = color;
+    ui.scanPreview.appendChild(sw);
+  }
+}
+
+function setScanFaceUi() {
+  const face = SCAN_FACES[scanFaceIndex];
+  ui.scanProgress.textContent = `Face ${scanFaceIndex + 1} of ${SCAN_FACES.length}`;
+  ui.scanTitle.textContent = face.title;
+  ui.scanHold.textContent = face.hold;
+  ui.btnScanBack.disabled = scanFaceIndex === 0;
+  ui.btnScanCapture.textContent =
+    scanFaceIndex === SCAN_FACES.length - 1 ? "Capture & finish" : "Capture face";
+  for (const cell of ui.scanGrid.querySelectorAll(".scan-cell")) {
+    cell.classList.toggle("center-lock", cell.dataset.i === "4");
+  }
+  renderScanPreview(scanLiveColors);
+}
+
+function setScanStatus(kind, message) {
+  ui.scanStatus.className = `scan-status${kind ? ` ${kind}` : ""}`;
+  ui.scanStatus.textContent = message;
+}
+
+function showScanEmpty(message) {
+  ui.scanEmpty.hidden = false;
+  ui.scanEmptyMsg.textContent = message;
+}
+
+function hideScanEmpty() {
+  ui.scanEmpty.hidden = true;
+}
+
+function scanLoop() {
+  if (!scanOpen) return;
+  if (ui.scanVideo.readyState >= 2) {
+    const result = sampleFaceFromVideo(ui.scanVideo);
+    if (result.ok) {
+      scanLiveColors = result.colors;
+      renderScanPreview(result.colors);
+      hideScanEmpty();
+      if (ui.scanStatus.classList.contains("error") === false) {
+        // keep capture hint unless error
+      }
+    } else if (result.error && result.brightness != null && result.brightness < 28) {
+      setScanStatus("error", result.error);
+      showScanEmpty(result.error);
+    }
+  }
+  scanRaf = requestAnimationFrame(scanLoop);
+}
+
+async function openScanner() {
+  if (scanOpen) return;
+  scanOpen = true;
+  scanFaceIndex = 0;
+  scanDraftColors = cube.getColors();
+  scanLiveColors = null;
+  ui.scanModal.hidden = false;
+  setScanFaceUi();
+  setScanStatus("", "Starting camera…");
+  showScanEmpty("Starting camera…");
+  ui.btnScanCapture.disabled = true;
+
+  try {
+    scanStream = await startCamera(ui.scanVideo);
+    hideScanEmpty();
+    setScanStatus("", "Align the face in the grid, then capture.");
+    ui.btnScanCapture.disabled = false;
+    cancelAnimationFrame(scanRaf);
+    scanRaf = requestAnimationFrame(scanLoop);
+  } catch (err) {
+    console.error(err);
+    showScanEmpty(err.message);
+    setScanStatus("error", err.message);
+    ui.btnScanCapture.disabled = true;
+  }
+}
+
+function closeScanner() {
+  scanOpen = false;
+  cancelAnimationFrame(scanRaf);
+  stopCamera(scanStream, ui.scanVideo);
+  scanStream = null;
+  ui.scanModal.hidden = true;
+  ui.btnScanCapture.disabled = false;
+}
+
+function captureCurrentFace() {
+  if (!scanOpen) return;
+  const face = SCAN_FACES[scanFaceIndex];
+  let colors9 = scanLiveColors;
+
+  if (!colors9) {
+    const result = sampleFaceFromVideo(ui.scanVideo);
+    if (!result.ok && !result.colors) {
+      setScanStatus("error", result.error || "Could not sample frame.");
+      return;
+    }
+    if (!result.ok && result.error) {
+      setScanStatus("error", result.error);
+      return;
+    }
+    colors9 = result.colors;
+  }
+
+  // Re-check brightness on capture
+  const check = sampleFaceFromVideo(ui.scanVideo);
+  if (check.brightness != null && check.brightness < 28) {
+    setScanStatus("error", check.error || "Too dark to capture reliably.");
+    return;
+  }
+
+  colors9 = colors9.slice();
+  colors9[4] = face.center;
+  scanDraftColors = applyFaceToCubeColors(scanDraftColors, face.id, colors9);
+  cube.setColors(scanDraftColors);
+  clearSolutionUi();
+
+  if (scanFaceIndex >= SCAN_FACES.length - 1) {
+    closeScanner();
+    setStatus(
+      "ok",
+      "Camera scan applied. Spot-check stickers (especially orange/red), then Solve."
+    );
+    ui.hint.textContent =
+      "Scan complete — paint any wrong stickers, then hit Solve cube.";
+    return;
+  }
+
+  scanFaceIndex += 1;
+  scanLiveColors = null;
+  setScanFaceUi();
+  setScanStatus("ok", `${face.title} saved. Next face…`);
+}
+
+function scanGoBack() {
+  if (scanFaceIndex <= 0) return;
+  scanFaceIndex -= 1;
+  scanLiveColors = null;
+  setScanFaceUi();
+  setScanStatus("", "Re-capture this face when ready.");
+}
+
 function init() {
   buildSwatches();
   cube = new CubeScene(ui.root, {
@@ -235,6 +415,26 @@ function init() {
     ui.hint.textContent = "Or keep painting to match your physical cube exactly.";
   });
 
+  ui.btnScan.addEventListener("click", () => openScanner());
+  ui.btnScanClose.addEventListener("click", () => {
+    closeScanner();
+    setStatus("idle", "Scan cancelled. Paint or resume scan anytime.");
+  });
+  ui.btnScanCapture.addEventListener("click", () => captureCurrentFace());
+  ui.btnScanBack.addEventListener("click", () => scanGoBack());
+  ui.scanModal.addEventListener("click", (e) => {
+    if (e.target === ui.scanModal) {
+      closeScanner();
+      setStatus("idle", "Scan cancelled. Paint or resume scan anytime.");
+    }
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && scanOpen) {
+      closeScanner();
+      setStatus("idle", "Scan cancelled. Paint or resume scan anytime.");
+    }
+  });
+
   ui.btnSolve.addEventListener("click", () => solveCube());
   ui.btnPlay.addEventListener("click", () => playAll());
   ui.btnNext.addEventListener("click", () => stepForward());
@@ -248,7 +448,6 @@ function init() {
     setStatus("ok", "Rewound to the start of the solution.");
   });
 
-  // Empty/loading first paint
   setStatus("loading", "Loading 3D stage…");
   requestAnimationFrame(() => {
     setStatus("idle", "Ready when your stickers match the cube in your hands.");

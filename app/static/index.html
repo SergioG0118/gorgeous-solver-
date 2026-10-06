@@ -34,6 +34,15 @@
 
       <aside class="panel" aria-label="Controls">
         <div class="panel-block">
+          <h2>Scan</h2>
+          <p class="panel-copy">
+            Point your camera at each face. Centers stay locked to the Western scheme.
+          </p>
+          <button type="button" class="btn secondary" id="btn-scan">Scan with camera</button>
+          <p class="scan-note">Works best in even light. You can fix any sticker by painting after.</p>
+        </div>
+
+        <div class="panel-block">
           <h2>Paint</h2>
           <p class="panel-copy">Centers stay fixed — they set which face is which.</p>
           <div class="swatches" id="swatches" role="listbox" aria-label="Sticker colors"></div>
@@ -82,6 +91,61 @@
       <span class="footer-sep">·</span>
       <span>Drag to orbit · scroll to zoom</span>
     </footer>
+
+    <div
+      id="scan-modal"
+      class="scan-modal"
+      hidden
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="scan-title"
+    >
+      <div class="scan-sheet">
+        <header class="scan-header">
+          <div>
+            <p class="scan-kicker" id="scan-progress">Face 1 of 6</p>
+            <h2 id="scan-title">Up (white)</h2>
+          </div>
+          <button type="button" class="btn ghost" id="btn-scan-close" aria-label="Close scanner">
+            Close
+          </button>
+        </header>
+        <p class="scan-hold" id="scan-hold">
+          Hold the white center toward the camera. Keep the green face toward the bottom of the
+          screen.
+        </p>
+        <div class="scan-stage" id="scan-stage">
+          <video id="scan-video" class="scan-video" playsinline muted autoplay></video>
+          <div class="scan-grid" id="scan-grid" aria-hidden="true">
+            <div class="scan-cell" data-i="0"></div>
+            <div class="scan-cell" data-i="1"></div>
+            <div class="scan-cell" data-i="2"></div>
+            <div class="scan-cell" data-i="3"></div>
+            <div class="scan-cell" data-i="4"></div>
+            <div class="scan-cell" data-i="5"></div>
+            <div class="scan-cell" data-i="6"></div>
+            <div class="scan-cell" data-i="7"></div>
+            <div class="scan-cell" data-i="8"></div>
+          </div>
+          <div class="scan-empty" id="scan-empty" hidden>
+            <p id="scan-empty-msg">Camera idle</p>
+          </div>
+        </div>
+        <div class="scan-preview" id="scan-preview" aria-label="Detected sticker colors"></div>
+        <p class="scan-status" id="scan-status" role="status">Starting camera…</p>
+        <div class="scan-actions">
+          <button type="button" class="btn ghost" id="btn-scan-back" disabled>Back</button>
+          <button type="button" class="btn primary" id="btn-scan-capture">
+            Capture face
+          </button>
+          <button type="button" class="btn secondary" id="btn-scan-skip" hidden>Skip face</button>
+        </div>
+        <p class="scan-accuracy">
+          Detection samples a 3×3 grid (no ML). Glare, shadows, and orange/red mix-ups are common —
+          paint to correct after scanning.
+        </p>
+      </div>
+    </div>
 
     <script type="importmap">
       {
