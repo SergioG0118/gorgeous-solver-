@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Spinforge — Rubik’s Cube Solver</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=IBM+Plex+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/static/css/styles.css" />
+  </head>
+  <body>
+    <div class="atmosphere" aria-hidden="true"></div>
+    <div class="grid-glow" aria-hidden="true"></div>
+
+    <header class="topbar">
+      <a class="brand" href="/">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span class="brand-name">Spinforge</span>
+      </a>
+      <p class="tagline">Match your cube. Get the moves.</p>
+    </header>
+
+    <main class="layout">
+      <section class="stage" aria-label="3D cube stage">
+        <div id="cube-root" class="cube-root" role="img" aria-label="Interactive Rubik's cube"></div>
+        <p class="stage-hint" id="stage-hint">
+          Pick a color, then tap stickers to match your physical cube.
+        </p>
+      </section>
+
+      <aside class="panel" aria-label="Controls">
+        <div class="panel-block">
+          <h2>Paint</h2>
+          <p class="panel-copy">Centers stay fixed — they set which face is which.</p>
+          <div class="swatches" id="swatches" role="listbox" aria-label="Sticker colors"></div>
+          <div class="btn-row">
+            <button type="button" class="btn ghost" id="btn-reset">Reset solved</button>
+            <button type="button" class="btn ghost" id="btn-scramble">Random scramble</button>
+          </div>
+        </div>
+
+        <div class="panel-block">
+          <h2>Solve</h2>
+          <p class="panel-copy">Real two-phase Kociemba solver — not a demo.</p>
+          <button type="button" class="btn primary" id="btn-solve">
+            <span class="btn-label">Solve cube</span>
+            <span class="btn-spinner" hidden aria-hidden="true"></span>
+          </button>
+          <div
+            id="status"
+            class="status idle"
+            role="status"
+            aria-live="polite"
+          >
+            Ready when your stickers match the cube in your hands.
+          </div>
+        </div>
+
+        <div class="panel-block solution-block" id="solution-block" hidden>
+          <div class="solution-head">
+            <h2>Solution</h2>
+            <span class="move-count" id="move-count"></span>
+          </div>
+          <div class="moves" id="moves" aria-label="Solution moves"></div>
+          <div class="playback">
+            <button type="button" class="btn ghost" id="btn-prev" disabled>Prev</button>
+            <button type="button" class="btn secondary" id="btn-play">Play</button>
+            <button type="button" class="btn ghost" id="btn-next" disabled>Next</button>
+            <button type="button" class="btn ghost" id="btn-rewind">Rewind</button>
+          </div>
+          <p class="step-label" id="step-label">Step 0 of 0</p>
+        </div>
+      </aside>
+    </main>
+
+    <footer class="footer">
+      <span>Standard notation · R U F′ etc.</span>
+      <span class="footer-sep">·</span>
+      <span>Drag to orbit · scroll to zoom</span>
+    </footer>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+        }
+      }
+    </script>
+    <script type="module" src="/static/js/app.js"></script>
+  </body>
+</html>
